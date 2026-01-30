@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 English Numbers - Listening Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Arial', sans-serif; touch-action: none; }
+        canvas { display: block; margin: 0 auto; background: #87CEEB; }
+        #ui { position: absolute; top: 20px; width: 100%; text-align: center; pointer-events: none; }
+        #score { font-size: 30px; color: white; text-shadow: 2px 2px 0 #000; }
+        #btnStart { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; font-size: 30px; cursor: pointer; pointer-events: auto; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div id="score">Question: 0 / 10</div>
+</div>
+<button id="btnStart">CLICK TO START</button>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const btnStart = document.getElementById('btnStart');
+const scoreDisplay = document.getElementById('score');
+
+canvas.width = 800; canvas.height = 600;
+
+const LANES = [180, 400, 620];
+const numberWords = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", 
+                     "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
+
+let currentLevel = 0; // 0: 1-6, 1: 1-10, 2: 1-20
+let questionsDone = 0;
+let correctAnswers = 0;
+let carLane = 1;
+let targetNum = -1;
+let cubes = [];
+let offset = 0;
+let gameActive = false;
+let particles = [];
+
+// Fonction pour faire parler l'IA en anglais
+function speak(text) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.8;
+    window.speechSynthesis.speak(utterance);
+}
+
+function spawnChallenge() {
+    if (questionsDone >= 10) {
+        gameActive = false;
+        return;
+    }
+    
+    // Déterminer le max selon le niveau
+    let max = 6;
+    if (questionsDone >= 3) max = 10;
+    if (questionsDone >= 7) max = 20;
+
+    targetNum = Math.floor(Math.random() * max) + 1;
+    speak(numberWords[targetNum]);
+
+    let vals = [targetNum];
+    while(vals.length < 3) {
+        let v = Math.floor(Math.random() * max) + 1;
+        if(!vals.includes(v)) vals.push(v);
+    }
+    vals.sort(() => Math.random() - 0.5);
+
+    cubes = LANES.map((laneX, i) => ({ lane: i, z: 1200, value: vals[i], hit: false }));
+    scoreDisplay.innerText = `Question: ${questionsDone + 1} / 10`;
+}
+
+function createConfetti() {
+    for(let i=0; i<100; i++) {
+        particles.push({
+            x: canvas.width/2, y: canvas.height/2,
+            vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+            color: `hsl(${Math.random()*360}, 100%, 50%)`, size: Math.random()*8+4
+        });
+    }
+}
+
+function drawFinalScene() {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "white";
+    ctx.font = "40px Arial";
+    ctx.fillText("FINISH!", canvas.width/2, 200);
+
+    // Système d'étoiles ou Confettis
+    if (correctAnswers === 10) {
+        ctx.fillText("PERFECT! CONGRATULATIONS!", canvas.width/2, 300);
+        if (particles.length === 0) createConfetti();
+    } else {
+        let stars = "☆ ☆ ☆";
+        if (correctAnswers >= 3) stars = "★ ☆ ☆";
+        if (correctAnswers >= 7) stars = "★ ★ ☆";
+        if (correctAnswers >= 9) stars = "★ ★ ★";
+        ctx.font = "80px Arial";
+        ctx.fillStyle = "yellow";
+        ctx.fillText(stars, canvas.width/2, 350);
+        ctx.font = "30px Arial";
+        ctx.fillText(`Score: ${correctAnswers} / 10`, canvas.width/2, 420);
+    }
+}
+
+function update() {
+    if (!gameActive) {
+        if (questionsDone >= 10) {
+            particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; });
+        }
+        return;
+    }
+
+    offset += 5;
+    cubes.forEach(cube => {
+        cube.z -= 10;
+        if (cube.z < 100 && cube.z > 50 && cube.lane === carLane && !cube.hit) {
+            cube.hit = true;
+            if (cube.value === targetNum) {
+                correctAnswers++;
+                speak("Great!");
+            } else {
+                speak("No!");
+            }
+            questionsDone++;
+            setTimeout(spawnChallenge, 500);
+        }
+    });
+
+    if (cubes.length > 0 && cubes[0].z < -50) {
+        questionsDone++;
+        spawnChallenge();
+    }
+}
+
+function draw() {
+    // CIEL & SOL
+    ctx.fillStyle = "#87CEEB"; ctx.fillRect(0, 0, canvas.width, 300);
+    for (let i = 0; i < 20; i++) {
+        ctx.fillStyle = ((Math.floor(offset / 20) + i) % 2 === 0) ? "#228B22" : "#32CD32";
+        ctx.fillRect(0, 300 + i*15, canvas.width, 30);
+    }
+
+    // CUBES
+    cubes.forEach(cube => {
+        let scale = 400 / cube.z;
+        let xPos = (LANES[cube.lane] - 400) * scale + 400;
+        let yPos = 300 + (150 * scale);
+        let size = 120 * scale;
+        if (cube.z > 0) {
+            ctx.fillStyle = "#FFD700"; ctx.fillRect(xPos - size/2, yPos - size, size, size);
+            ctx.strokeStyle = "white"; ctx.strokeRect(xPos - size/2, yPos - size, size, size);
+            ctx.fillStyle = "black"; ctx.font = `bold ${Math.floor(size/1.5)}px Arial`;
+            ctx.textAlign = "center"; ctx.fillText(cube.value, xPos, yPos - size/4);
+        }
+    });
+
+    // VOITURE
+    let carX = LANES[carLane];
+    ctx.fillStyle = "red"; ctx.fillRect(carX - 45, 500, 90, 40);
+    ctx.fillStyle = "black"; ctx.fillRect(carX-55, 510, 20, 35); ctx.fillRect(carX+35, 510, 20, 35);
+
+    // PARTICULES (CONFETTIS)
+    particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+    });
+
+    if (questionsDone >= 10) drawFinalScene();
+
+    update();
+    requestAnimationFrame(draw);
+}
+
+// CONTRÔLES
+btnStart.addEventListener('click', () => {
+    btnStart.style.display = 'none';
+    gameActive = true;
+    questionsDone = 0; correctAnswers = 0;
+    spawnChallenge();
+});
+
+window.addEventListener('keydown', (e) => {
+    if (e.key === "ArrowLeft" && carLane > 0) carLane--;
+    if (e.key === "ArrowRight" && carLane < 2) carLane++;
+});
+
+canvas.addEventListener('mousedown', (e) => {
+    let clickX = e.clientX - canvas.offsetLeft;
+    if (clickX < canvas.width / 3) carLane = 0;
+    else if (clickX > (canvas.width / 3) * 2) carLane = 2;
+    else carLane = 1;
+});
+
+draw();
+</script>
+</body>
+</html>
